@@ -1,5 +1,6 @@
 import socket
 import sys
+import os
 def create_socket():
     try:
         global host
@@ -35,12 +36,15 @@ def send_command(conn):
     print(response,end=" ")
     while True:
         cmd=input()
+
         if cmd=="exit":
             conn.send(str.encode(cmd))
             break
-        elif cmd[:4]=="pull":   # still not complete if the client file ends it still does not close
+
+        elif cmd[:4]=="pull":   
             conn.send(str.encode(cmd))
             filesize=int(conn.recv(16).decode().strip())  #get the filesize
+
             if filesize>=0:
                 received=0
                 with open(cmd[5:],'wb') as f:
@@ -48,10 +52,29 @@ def send_command(conn):
                         response=conn.recv(min(1024, filesize - received))
                         f.write(response)
                         received+=len(response)
+
             elif filesize==-1:
-                print("file not found ")
+                print("file not found ",flush=True)
             else:
                 print(str(conn.recv(1024),"utf-8"))
+            response=str(conn.recv(1024),'utf-8')
+            print(response,end=" ")
+
+        elif cmd[:4]=="push":
+            conn.send(str.encode(cmd))
+            try:
+                filesize = os.path.getsize(cmd[5:])
+                conn.send(str(filesize).encode().ljust(16))    # function to make the bytestream 16 bytes
+                with open(cmd[5:],'rb') as f:
+                    out=f.read(1024)
+                    while out:conn.send(out)
+            except FileNotFoundError:
+                conn.send(str(-1).encode().ljust(16))
+                print("file not found ",flush=True)
+            except Exception as e:
+                conn.send(str(-2).encode().ljust(16))
+                conn.send(str(e).encode())
+                print("error : ",e,flush=True)
             response=str(conn.recv(1024),'utf-8')
             print(response,end=" ")
         elif len(cmd):
